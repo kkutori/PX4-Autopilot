@@ -634,7 +634,10 @@ class uploader:
         binary_max_size = float(fw.property('image_maxsize'))
         percent = (binary_size / binary_max_size) * 100
 
-        print("Loaded firmware for board id: %s,%s size: %d bytes (%.2f%%) " % (fw.property('board_id'), fw.property('board_revision'), fw.property('image_size'), percent))
+        # print("Loaded firmware for board id: %s,%s size: %d bytes (%.2f%%) " % (fw.property('board_id'), fw.property('board_revision'), fw.property('image_size'), percent))
+        print("Loaded firmware for board id: %s, revision: %s" % (fw.property('board_id'), fw.property('board_revision')))
+        print("image size: %d/%d bytes (%.2f%%) " % (fw.property('image_size'), fw.property('image_maxsize'), percent))
+        print("Firmware image limit size: %d bytes" % self.fw_maxsize)
         print()
 
         print(f"Bootloader version: {self.version}")
@@ -652,7 +655,8 @@ class uploader:
 
         # Prevent uploads where the image would overflow the flash
         if self.fw_maxsize < fw.property('image_size'):
-            raise RuntimeError("Firmware image is too large for this board")
+            # raise RuntimeError("Firmware image is too large for this board")
+            raise RuntimeError("Firmware image is too large for this board, limit size: %d bytes" % self.fw_maxsize)
 
         # OTP added in v4:
         if self.bl_rev >= 4:

@@ -102,6 +102,9 @@ static int mtd_status(void)
 					printf("  blocksize:      %lu\n", blocksize);
 					printf("  erasesize:      %lu\n", erasesize);
 					printf("  neraseblocks:   %lu\n", neraseblocks);
+					printf("  blkpererase:    %u\n", blkpererase);
+					printf("  each nblocks:   %u\n", nblocks);
+					printf("  each partsize:  %u\n", partsize);
 					printf("  No. partitions: %u\n", instances[i]->n_partitions_current);
 
 
@@ -114,6 +117,11 @@ static int mtd_status(void)
 						printf("    partition: %u:\n", p);
 						printf("     name:   %s\n", instances[i]->partition_names[p]);
 						printf("     blocks: %" PRIu32 " (%lu bytes)\n", geo.neraseblocks, erasesize * geo.neraseblocks);
+						printf("     geo.blocksize:%lu\n", geo.blocksize);
+						printf("     geo.erasesize:%lu\n", geo.erasesize);
+						printf("     geo.neraseblocks:%lu\n", geo.neraseblocks);
+
+
 						totalnblocks += geo.neraseblocks;
 						totalpartsize += erasesize * geo.neraseblocks;
 					}
