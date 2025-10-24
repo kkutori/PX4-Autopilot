@@ -126,7 +126,7 @@ void Battery::updateBatteryStatus(const hrt_abstime &timestamp)
 		_warning = determineWarning(_state_of_charge);
 	}
 
-	if (_voltage_filter_v.getState() > 2.1f) {
+	if (_voltage_filter_v.getState() > 5.0f) {
 		_battery_initialized = true;
 
 	} else {
