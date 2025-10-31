@@ -54,9 +54,6 @@ else()
 		timer_config.cpp
 		usb.c
 		mtd.cpp
-		qspi.c
-		flash_w25q128.c
-
 	)
 	# add_dependencies(drivers_board arch_board_hw_info)
 
