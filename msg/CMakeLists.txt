@@ -263,6 +263,7 @@ set(msg_files
 	versioned/VehicleRatesSetpoint.msg
 	versioned/VehicleStatus.msg
 	versioned/VtolVehicleStatus.msg
+	jcfh_uuid.msg
 )
 list(SORT msg_files)
 
