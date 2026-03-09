@@ -47,6 +47,10 @@
 #include <math.h>
 #include <poll.h>
 
+#ifdef __PX4_NUTTX
+#include <nuttx/progmem.h>
+#endif
+
 #ifdef CONFIG_NET
 #include <net/if.h>
 #include <arpa/inet.h>
@@ -68,6 +72,30 @@
 #else
 #define MAVLINK_RECEIVER_NET_ADDED_STACK 0
 #endif
+
+namespace
+{
+static constexpr uint32_t UUID_SIZE = 20;
+static constexpr hrt_abstime UUID_RESEND_DELAY_US = 5000;
+
+#ifdef __PX4_NUTTX
+static constexpr uint32_t UUID_FLASH_START = 0x0801E000;
+static constexpr uint32_t UUID_FLASH_END = 0x0801F000;
+static constexpr uint32_t UUID_SLOT_SIZE = 32;
+static_assert(UUID_SLOT_SIZE >= UUID_SIZE, "UUID slot must hold full UUID");
+static_assert(((UUID_FLASH_END - UUID_FLASH_START) % UUID_SLOT_SIZE) == 0, "UUID flash range must align to slot size");
+bool uuid_slot_is_empty(const uint8_t *slot_data)
+{
+	for (size_t i = 0; i < UUID_SLOT_SIZE; ++i) {
+		if (slot_data[i] != UINT8_MAX) {
+			return false;
+		}
+	}
+
+	return true;
+}
+#endif
+} // namespace
 
 MavlinkReceiver::~MavlinkReceiver()
 {
@@ -305,6 +333,14 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 
 	case MAVLINK_MSG_ID_GIMBAL_DEVICE_ATTITUDE_STATUS:
 		handle_message_gimbal_device_attitude_status(msg);
+		break;
+
+	case MAVLINK_MSG_ID_UUID_REQ:
+		handle_message_uuid_req(msg);
+		break;
+
+	case MAVLINK_MSG_ID_UUID_SET:
+		handle_message_uuid_set(msg);
 		break;
 
 	default:
@@ -3265,6 +3301,7 @@ MavlinkReceiver::run()
 		}
 
 		const hrt_abstime t = hrt_absolute_time();
+		process_uuid_resend(t);
 
 		CheckHeartbeats(t);
 
@@ -3529,4 +3566,170 @@ void MavlinkReceiver::stop()
 {
 	_should_exit.store(true);
 	pthread_join(_thread, nullptr);
+}
+
+void MavlinkReceiver::handle_message_uuid_req(mavlink_message_t *msg)
+{
+	mavlink_uuid_req_t req{};
+	mavlink_msg_uuid_req_decode(msg, &req);
+
+	if (!uuid_target_matches(req.target_system, req.target_component)) {
+		return;
+	}
+
+	load_uuid_cache_if_needed();
+	publish_uuid_and_send(_uuid_cache);
+}
+
+void MavlinkReceiver::handle_message_uuid_set(mavlink_message_t *msg)
+{
+	mavlink_uuid_set_t set_req{};
+	mavlink_msg_uuid_set_decode(msg, &set_req);
+
+	if (!uuid_target_matches(set_req.target_system, set_req.target_component)) {
+		return;
+	}
+
+	load_uuid_cache_if_needed();
+
+	bool write_ok = true;
+	const bool same_uuid = (memcmp(_uuid_cache, set_req.uuid, UUID_SIZE) == 0);
+
+	// Only append a new slot if UUID actually changes.
+	if (!same_uuid) {
+		write_ok = write_uuid_to_flash(set_req.uuid);
+
+		if (write_ok) {
+			memcpy(_uuid_cache, set_req.uuid, UUID_SIZE);
+
+		} else {
+			// Keep cache consistent with flash content after a failed write.
+
+		}
+	}
+
+	publish_uuid_and_send(_uuid_cache);
+
+	if (!write_ok) {
+		_mavlink->send_statustext_critical("UUID write failed\t");
+	}
+}
+
+bool MavlinkReceiver::uuid_target_matches(uint8_t target_system, uint8_t target_component) const
+{
+	const bool system_ok = (target_system == 0) || (target_system == mavlink_system.sysid);
+	const bool component_ok = (target_component == 0) || (target_component == mavlink_system.compid);
+	return system_ok && component_ok;
+}
+
+
+void MavlinkReceiver::load_uuid_cache_if_needed()
+{
+	if (!_uuid_cache_valid) {
+		refresh_uuid_cache_from_flash();
+	}
+}
+
+void MavlinkReceiver::refresh_uuid_cache_from_flash()
+{
+	uint8_t uuid_data[UUID_SIZE] {};
+	const bool read_ok = read_uuid_from_flash(uuid_data);
+
+	if (!read_ok) {
+		memset(uuid_data, UINT8_MAX, sizeof(uuid_data));
+	}
+
+	memcpy(_uuid_cache, uuid_data, sizeof(_uuid_cache));
+	_uuid_cache_valid = true;
+}
+
+void MavlinkReceiver::publish_uuid_and_send(const uint8_t *uuid_data)
+{
+	jcfh_uuid_s uorb_msg{};
+	uorb_msg.timestamp = hrt_absolute_time();
+	memcpy(uorb_msg.uuid, uuid_data, sizeof(uorb_msg.uuid));
+	_jcfh_uuid_pub.publish(uorb_msg);
+
+	send_uuid_data(uuid_data);
+
+	memcpy(_uuid_resend_data, uuid_data, sizeof(_uuid_resend_data));
+	_uuid_resend_time = hrt_absolute_time() + UUID_RESEND_DELAY_US;
+	_uuid_resend_pending = true;
+}
+
+void MavlinkReceiver::send_uuid_data(const uint8_t *uuid_data)
+{
+	mavlink_uuid_data_t mavlink_msg{};
+	memcpy(mavlink_msg.uuid, uuid_data, sizeof(mavlink_msg.uuid));
+	mavlink_msg_uuid_data_send_struct(_mavlink->get_channel(), &mavlink_msg);
+}
+
+void MavlinkReceiver::process_uuid_resend(const hrt_abstime &t)
+{
+	if (_uuid_resend_pending && (t >= _uuid_resend_time)) {
+		send_uuid_data(_uuid_resend_data);
+		_uuid_resend_pending = false;
+		_uuid_resend_time = 0;
+	}
+}
+
+bool MavlinkReceiver::read_uuid_from_flash(uint8_t *uuid_buffer)
+{
+	if (uuid_buffer == nullptr) {
+		return false;
+	}
+
+	memset(uuid_buffer, UINT8_MAX, UUID_SIZE);
+
+#ifdef __PX4_NUTTX
+	uint8_t slot_buffer[UUID_SLOT_SIZE] {};
+
+	for (uint32_t flash_end = UUID_FLASH_END; flash_end > UUID_FLASH_START; flash_end -= UUID_SLOT_SIZE) {
+		const uint32_t slot_address = flash_end - UUID_SLOT_SIZE;
+		memcpy(slot_buffer, reinterpret_cast<const void *>(slot_address), UUID_SLOT_SIZE);
+
+		if (!uuid_slot_is_empty(slot_buffer)) {
+			memcpy(uuid_buffer, slot_buffer, UUID_SIZE);
+			return true;
+		}
+	}
+#endif
+
+	return false;
+}
+
+bool MavlinkReceiver::write_uuid_to_flash(const uint8_t *uuid_data)
+{
+#ifndef __PX4_NUTTX
+	(void)uuid_data;
+	return false;
+#else
+	if (uuid_data == nullptr) {
+		return false;
+	}
+
+	// H743 要求写入 32 byte 对齐，使用 32 字节槽位追加存储。
+	uint8_t write_buffer[UUID_SLOT_SIZE] __attribute__((aligned(UUID_SLOT_SIZE)));
+	memset(write_buffer, UINT8_MAX, sizeof(write_buffer));
+	memcpy(write_buffer, uuid_data, UUID_SIZE);
+
+	uint8_t slot_buffer[UUID_SLOT_SIZE] {};
+	uint32_t write_address = UUID_FLASH_END;
+
+	for (uint32_t flash_address = UUID_FLASH_START; flash_address < UUID_FLASH_END; flash_address += UUID_SLOT_SIZE) {
+		memcpy(slot_buffer, reinterpret_cast<const void *>(flash_address), UUID_SLOT_SIZE);
+
+		if (uuid_slot_is_empty(slot_buffer)) {
+			write_address = flash_address;
+			break;
+		}
+	}
+
+	if (write_address >= UUID_FLASH_END) {
+		return false;
+	}
+
+	const ssize_t written_bytes = up_progmem_write(write_address, write_buffer, sizeof(write_buffer));
+	return (written_bytes == static_cast<ssize_t>(sizeof(write_buffer)));
+#endif
 }

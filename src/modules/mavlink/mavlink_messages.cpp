@@ -56,6 +56,7 @@
 #include <uORB/SubscriptionMultiArray.hpp>
 #include <uORB/topics/vehicle_status.h>
 
+#include "streams/JCFH_UUID.hpp"
 #include "streams/ACTUATOR_CONTROL_TARGET.hpp"
 #include "streams/ACTUATOR_OUTPUT_STATUS.hpp"
 #include "streams/ALTITUDE.hpp"
@@ -321,6 +322,9 @@ union px4_custom_mode get_px4_custom_mode(uint8_t nav_state)
 }
 
 static const StreamListItem streams_list[] = {
+#if defined(JCFH_UUID_HPP)
+	create_stream_list_item<MavlinkStreamUuidData>(),
+#endif
 #if defined(HEARTBEAT_HPP)
 	create_stream_list_item<MavlinkStreamHeartbeat>(),
 #endif // HEARTBEAT_HPP
