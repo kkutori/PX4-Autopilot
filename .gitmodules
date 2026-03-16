@@ -1,7 +1,7 @@
 [submodule "src/modules/mavlink/mavlink"]
 	path = src/modules/mavlink/mavlink
 	url = https://github.com/kkutori/mavlink.git
-	branch = mavlink_jcfh_uuid
+	branch = mavlink_jcfh_uuid_px4_v1.16.1
 [submodule "Tools/simulation/jmavsim/jMAVSim"]
 	path = Tools/simulation/jmavsim/jMAVSim
 	url = https://github.com/PX4/jMAVSim.git
