@@ -224,7 +224,6 @@ private:
 	void load_uuid_cache_if_needed();
 	void refresh_uuid_cache_from_flash();
 	void send_uuid_data(const uint8_t *uuid_data);
-	void process_uuid_resend(const hrt_abstime &t);
 	void publish_uuid_and_send(const uint8_t *uuid_data);
 	bool write_uuid_to_flash(const uint8_t *uuid_data);
 	bool read_uuid_from_flash(uint8_t *uuid_data);
@@ -376,9 +375,6 @@ private:
 	uORB::Publication<jcfh_uuid_s> 				_jcfh_uuid_pub{ORB_ID(jcfh_uuid)};
 	bool _uuid_cache_valid{false};
 	uint8_t _uuid_cache[20] {};
-	bool _uuid_resend_pending{false};
-	hrt_abstime _uuid_resend_time{0};
-	uint8_t _uuid_resend_data[20] {};
 
 	// hil_sensor and hil_state_quaternion
 	enum SensorSource {

@@ -76,7 +76,6 @@
 namespace
 {
 static constexpr uint32_t UUID_SIZE = 20;
-static constexpr hrt_abstime UUID_RESEND_DELAY_US = 5000;
 
 #ifdef __PX4_NUTTX
 static constexpr uint32_t UUID_FLASH_START = 0x0801E000;
@@ -3311,8 +3310,6 @@ MavlinkReceiver::run()
 		}
 
 		const hrt_abstime t = hrt_absolute_time();
-		process_uuid_resend(t);
-
 		CheckHeartbeats(t);
 
 		if (t - last_send_update > timeout * 1000) {
@@ -3638,10 +3635,6 @@ void MavlinkReceiver::publish_uuid_and_send(const uint8_t *uuid_data)
 	_jcfh_uuid_pub.publish(uorb_msg);
 
 	send_uuid_data(uuid_data);
-
-	memcpy(_uuid_resend_data, uuid_data, sizeof(_uuid_resend_data));
-	_uuid_resend_time = hrt_absolute_time() + UUID_RESEND_DELAY_US;
-	_uuid_resend_pending = true;
 }
 
 void MavlinkReceiver::send_uuid_data(const uint8_t *uuid_data)
@@ -3649,15 +3642,6 @@ void MavlinkReceiver::send_uuid_data(const uint8_t *uuid_data)
 	mavlink_uuid_data_t mavlink_msg{};
 	memcpy(mavlink_msg.uuid, uuid_data, sizeof(mavlink_msg.uuid));
 	mavlink_msg_uuid_data_send_struct(_mavlink.get_channel(), &mavlink_msg);
-}
-
-void MavlinkReceiver::process_uuid_resend(const hrt_abstime &t)
-{
-	if (_uuid_resend_pending && (t >= _uuid_resend_time)) {
-		send_uuid_data(_uuid_resend_data);
-		_uuid_resend_pending = false;
-		_uuid_resend_time = 0;
-	}
 }
 
 bool MavlinkReceiver::read_uuid_from_flash(uint8_t *uuid_buffer)
