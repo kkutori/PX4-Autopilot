@@ -76,7 +76,6 @@
 
 namespace
 {
-#if defined(MAVLINK_MSG_ID_UUID_REQ)
 static constexpr uint32_t UUID_SIZE = 20;
 
 #ifdef __PX4_NUTTX
@@ -96,7 +95,6 @@ bool uuid_slot_is_empty(const uint8_t *slot_data)
 	return true;
 }
 #endif
-#endif // MAVLINK_MSG_ID_UUID_REQ
 } // namespace
 
 MavlinkReceiver::~MavlinkReceiver()
@@ -360,7 +358,6 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
 #endif
 
-#if defined(MAVLINK_MSG_ID_UUID_REQ)
 	case MAVLINK_MSG_ID_UUID_REQ:
 		handle_message_uuid_req(msg);
 		break;
@@ -368,7 +365,6 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 	case MAVLINK_MSG_ID_UUID_SET:
 		handle_message_uuid_set(msg);
 		break;
-#endif
 
 	default:
 		break;
@@ -3573,7 +3569,6 @@ void MavlinkReceiver::stop()
 	pthread_join(_thread, nullptr);
 }
 
-#if defined(MAVLINK_MSG_ID_UUID_REQ)
 void MavlinkReceiver::handle_message_uuid_req(mavlink_message_t *msg)
 {
 	mavlink_uuid_req_t req{};
@@ -3727,4 +3722,3 @@ bool MavlinkReceiver::write_uuid_to_flash(const uint8_t *uuid_data)
 	return (written_bytes == static_cast<ssize_t>(sizeof(write_buffer)));
 #endif
 }
-#endif // MAVLINK_MSG_ID_UUID_REQ
