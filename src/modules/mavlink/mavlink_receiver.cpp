@@ -76,6 +76,7 @@
 
 namespace
 {
+#if defined(MAVLINK_MSG_ID_UUID_REQ)
 static constexpr uint32_t UUID_SIZE = 20;
 
 #ifdef __PX4_NUTTX
@@ -95,6 +96,7 @@ bool uuid_slot_is_empty(const uint8_t *slot_data)
 	return true;
 }
 #endif
+#endif // MAVLINK_MSG_ID_UUID_REQ
 } // namespace
 
 MavlinkReceiver::~MavlinkReceiver()
@@ -358,6 +360,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		break;
 #endif
 
+#if defined(MAVLINK_MSG_ID_UUID_REQ)
 	case MAVLINK_MSG_ID_UUID_REQ:
 		handle_message_uuid_req(msg);
 		break;
@@ -365,6 +368,7 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 	case MAVLINK_MSG_ID_UUID_SET:
 		handle_message_uuid_set(msg);
 		break;
+#endif
 
 	default:
 		break;
@@ -3569,6 +3573,7 @@ void MavlinkReceiver::stop()
 	pthread_join(_thread, nullptr);
 }
 
+#if defined(MAVLINK_MSG_ID_UUID_REQ)
 void MavlinkReceiver::handle_message_uuid_req(mavlink_message_t *msg)
 {
 	mavlink_uuid_req_t req{};
@@ -3612,7 +3617,7 @@ void MavlinkReceiver::handle_message_uuid_set(mavlink_message_t *msg)
 	publish_uuid_and_send(_uuid_cache);
 
 	if (!write_ok) {
-		_mavlink->send_statustext_critical("UUID write failed\t");
+		_mavlink.send_statustext_critical("UUID write failed\t");
 	}
 }
 
@@ -3659,7 +3664,7 @@ void MavlinkReceiver::send_uuid_data(const uint8_t *uuid_data)
 {
 	mavlink_uuid_data_t mavlink_msg{};
 	memcpy(mavlink_msg.uuid, uuid_data, sizeof(mavlink_msg.uuid));
-	mavlink_msg_uuid_data_send_struct(_mavlink->get_channel(), &mavlink_msg);
+	mavlink_msg_uuid_data_send_struct(_mavlink.get_channel(), &mavlink_msg);
 }
 
 bool MavlinkReceiver::read_uuid_from_flash(uint8_t *uuid_buffer)
@@ -3722,3 +3727,4 @@ bool MavlinkReceiver::write_uuid_to_flash(const uint8_t *uuid_data)
 	return (written_bytes == static_cast<ssize_t>(sizeof(write_buffer)));
 #endif
 }
+#endif // MAVLINK_MSG_ID_UUID_REQ

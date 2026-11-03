@@ -218,6 +218,7 @@ private:
 #endif // !CONSTRAINED_FLASH
 	void handle_message_request_event(mavlink_message_t *msg);
 
+#if defined(MAVLINK_MSG_ID_UUID_REQ)
 	void handle_message_uuid_req(mavlink_message_t *msg);
 	void handle_message_uuid_set(mavlink_message_t *msg);
 	bool uuid_target_matches(uint8_t target_system, uint8_t target_component) const;
@@ -227,6 +228,7 @@ private:
 	void publish_uuid_and_send(const uint8_t *uuid_data);
 	bool write_uuid_to_flash(const uint8_t *uuid_data);
 	bool read_uuid_from_flash(uint8_t *uuid_data);
+#endif
 
 	void CheckHeartbeats(const hrt_abstime &t, bool force = false);
 
@@ -374,9 +376,11 @@ private:
 
 	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
+#if defined(MAVLINK_MSG_ID_UUID_REQ)
 	uORB::Publication<jcfh_uuid_s> 				_jcfh_uuid_pub{ORB_ID(jcfh_uuid)};
 	bool _uuid_cache_valid{false};
 	uint8_t _uuid_cache[20] {};
+#endif
 
 	// hil_sensor and hil_state_quaternion
 	enum SensorSource {

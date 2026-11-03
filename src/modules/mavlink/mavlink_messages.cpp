@@ -56,7 +56,9 @@
 #include <uORB/SubscriptionMultiArray.hpp>
 #include <uORB/topics/vehicle_status.h>
 
-#include "streams/JCFH_UUID.hpp"
+#if defined(MAVLINK_MSG_ID_UUID_DATA)
+# include "streams/JCFH_UUID.hpp"
+#endif
 #include "streams/ACTUATOR_OUTPUT_STATUS.hpp"
 #include "streams/ALTITUDE.hpp"
 #include "streams/ATTITUDE.hpp"
