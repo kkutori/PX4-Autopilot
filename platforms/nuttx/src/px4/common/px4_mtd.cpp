@@ -68,6 +68,51 @@ static int total_blocks = 0;
 static mtd_instance_s *instances[MAX_MTD_INSTANCES] = {};
 
 
+static int w25_attach(mtd_instance_s &instance)
+{
+#if !defined(CONFIG_MTD_W25)
+	PX4_ERR("Misconfiguration CONFIG_MTD_W25 not set");
+	return ENXIO;
+#else
+	struct spi_dev_s *spi = px4_spibus_initialize(px4_find_spi_bus(instance.devid));
+
+	if (spi == nullptr) {
+		PX4_ERR("failed to locate spi bus");
+		return -ENXIO;
+	}
+
+	/*
+	 * The W25 driver configures the bus using CONFIG_W25_SPIMODE and
+	 * CONFIG_W25_SPIFREQUENCY before every transaction. Set them here only
+	 * once to leave the bus in a known state before probing the device.
+	 */
+	SPI_LOCK(spi, true);
+	SPI_SETFREQUENCY(spi, CONFIG_W25_SPIFREQUENCY);
+	SPI_SETBITS(spi, 8);
+	SPI_SETMODE(spi, static_cast<spi_mode_e>(CONFIG_W25_SPIMODE));
+	SPI_SELECT(spi, instance.devid, false);
+	SPI_LOCK(spi, false);
+
+	for (int attempt = 0; attempt < 10; attempt++) {
+		instance.mtd_dev = w25_initialize(spi);
+
+		if (instance.mtd_dev) {
+			if (attempt > 0) {
+				PX4_WARN("W25 MTD needed %d attempts to attach", attempt + 1);
+			}
+
+			return 0;
+		}
+
+		px4_usleep(10000);
+	}
+
+	PX4_ERR("failed to initialize W25 MTD driver");
+	return -EIO;
+#endif
+}
+
+
 static int ramtron_attach(mtd_instance_s &instance)
 {
 #if !defined(CONFIG_MTD_RAMTRON)
@@ -350,7 +395,17 @@ memoryout:
 			rv = at24xxx_attach(*instances[i]);
 
 		} else if (mtd_list->entries[num_entry]->device->bus_type == px4_mft_device_t::SPI) {
-			rv = ramtron_attach(*instances[i]);
+			switch (mtd_list->entries[num_entry]->device->spi_driver) {
+			case px4_mft_device_t::SPI_DRIVER_W25:
+				rv = w25_attach(*instances[i]);
+				break;
+
+			case px4_mft_device_t::SPI_DRIVER_DEFAULT:
+			default:
+				rv = ramtron_attach(*instances[i]);
+				break;
+			}
+
 #if defined(HAS_FLEXSPI)
 
 		} else if (mtd_list->entries[num_entry]->device->bus_type == px4_mft_device_t::FLEXSPI) {

@@ -52,6 +52,11 @@ typedef struct  {
 		FLEXSPI = 3
 	} bus_type;
 
+	enum px4_spi_driver {
+		SPI_DRIVER_DEFAULT = 0, // Ramtron (FRAM)
+		SPI_DRIVER_W25 = 1      // Winbond W25 SPI NOR flash
+	} spi_driver;
+
 	uint32_t devid;
 } px4_mft_device_t;
 
